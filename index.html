@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cyber-Rogue: Neon Extraction</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            background: radial-gradient(circle at center, #1a0b2e 0%, #050505 100%);
+        }
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            pointer-events: none;
+            user-select: none;
+            display: none;
+        }
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.85);
+        }
+        #main-menu {
+            background: radial-gradient(circle, #1a0b2e 0%, #000 100%);
+        }
+        .upgrade-card {
+            background: #111;
+            border: 2px solid #00ffff;
+            padding: 20px;
+            margin: 10px;
+            width: 80%;
+            max-width: 400px;
+            cursor: pointer;
+            transition: 0.3s;
+            text-align: center;
+        }
+        .upgrade-card:hover {
+            background: #004444;
+            transform: scale(1.05);
+        }
+        .neon-text { text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff; }
+        .neon-text-cyan { text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; }
+        
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background: rgba(0, 255, 255, 0.1);
+            position: absolute;
+            z-index: 201;
+            animation: scanline 6s linear infinite;
+        }
+        @keyframes scanline {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        
+        .glitch-btn {
+            position: relative;
+            padding: 15px 40px;
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            background: transparent;
+            overflow: hidden;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+        .glitch-btn:hover {
+            background: #00ffff;
+            color: #000;
+            box-shadow: 0 0 30px #00ffff;
+        }
+        #controller-status {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 10px;
+            color: #555;
+            pointer-events: none;
+        }
+        .key-box {
+            border: 1px solid #00ffff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin: 0 4px;
+            font-size: 0.75rem;
+            color: #00ffff;
+        }
+    </style>
+</head>
+<body>
+
+<div id="main-menu" class="overlay-screen">
+    <div class="scanline"></div>
+    <h1 class="text-6xl md:text-8xl font-black italic mb-2 neon-text text-pink-500">CYBER</h1>
+    <h1 class="text-5xl md:text-7xl font-black italic mb-8 neon-text-cyan text-cyan-400">ROGUE</h1>
+    
+    <!-- Controls Guide -->
+    <div class="flex flex-wrap justify-center gap-8 mb-8 text-[11px] text-cyan-300 opacity-80 max-w-2xl px-4">
+        <div class="flex flex-col items-center gap-2 bg-black/40 p-4 border border-cyan-900 rounded-lg">
+            <p class="font-bold text-pink-500 mb-1 border-b border-pink-900 w-full text-center pb-1">KEYBOARD</p>
+            <div class="flex items-center">
+                <span class="key-box">WASD</span><span>MOVE / JUMP</span>
+            </div>
+            <div class="flex items-center">
+                <span class="key-box">SPACE</span><span>JUMP</span>
+            </div>
+            <div class="flex items-center">
+                <span class="key-box">F</span> or <span class="key-box">E</span><span>SHOOT / CREATE PLATFORM</span>
+            </div>
+            <div class="flex items-center">
+                <span class="key-box">R</span><span>RESET PLATFORMS</span>
+            </div>
+        </div>
+
+        <div class="flex flex-col items-center gap-2 bg-black/40 p-4 border border-cyan-900 rounded-lg">
+            <p class="font-bold text-cyan-500 mb-1 border-b border-cyan-900 w-full text-center pb-1">GAMEPAD</p>
+            <div class="flex items-center">
+                <span class="key-box">L-STICK</span><span>MOVE</span>
+            </div>
+            <div class="flex items-center">
+                <span class="key-box">A</span> or <span class="key-box">B</span><span>JUMP</span>
+            </div>
+            <div class="flex items-center">
+                <span class="key-box">X</span> or <span class="key-box">RT</span><span>SHOOT / CREATE</span>
+            </div>
+            <div class="flex items-center">
+                <span class="key-box">Y</span><span>RESET PLATFORMS</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-10 text-center">
+        <p class="text-pink-400 text-xs mb-1">HIGH_SCORE_RECORDED</p>
+        <p id="high-score" class="text-2xl font-bold text-white">00000</p>
+    </div>
+
+    <div class="flex flex-col items-center gap-4">
+        <button onclick="startGame()" class="glitch-btn">START</button>
+        <div class="text-[10px] text-cyan-400 opacity-50 tracking-[0.3em] flex flex-col items-center">
+            <p>PRESS ENTER TO BOOT</p>
+            <p id="gp-hint" style="display:none">PAD DETECTED: PRESS [A/B] TO START</p>
+        </div>
+    </div>
+</div>
+
+<div id="ui-layer">
+    <div class="flex justify-between w-64 mb-2">
+        <div class="text-xl font-bold tracking-tighter">DEPTH: <span id="depth">1</span></div>
+        <div class="text-xl font-bold tracking-tighter">SCORE: <span id="score">0</span></div>
+    </div>
+    <div class="text-xl tracking-widest mb-1">HP: <span id="lives">3</span> / <span id="max-lives">3</span></div>
+    <div class="flex items-center gap-4">
+        <div class="text-xs tracking-widest text-pink-400">AMMO: <span id="ammo">3</span> / 3</div>
+        <div class="text-[10px] tracking-widest text-cyan-400 opacity-70">[R/PAD_Y] RESET PLATFORMS</div>
+    </div>
+    <div id="perks-list" class="text-[10px] mt-2 text-yellow-400 max-w-xs"></div>
+</div>
+
+<div id="upgrade-screen" class="overlay-screen" style="display: none;">
+    <h2 class="text-3xl font-black text-cyan-400 mb-8 neon-text-cyan">UPGRADE PROTOCOL</h2>
+    <div id="upgrade-options" class="flex flex-col items-center w-full"></div>
+    <p class="mt-4 text-[10px] text-cyan-700">PAD: L/R STICK TO SELECT, A/B TO CONFIRM</p>
+</div>
+
+<div id="message-box" class="overlay-screen" style="display: none;">
+    <h2 id="msg-title" class="text-3xl font-black mb-4 neon-text">SYSTEM FAILURE</h2>
+    <p id="msg-text" class="mb-6 text-white opacity-80 uppercase tracking-widest text-center px-4"></p>
+    <button id="return-btn" onclick="backToMenu()" class="border-2 border-pink-500 text-pink-500 px-8 py-2 font-bold uppercase hover:bg-pink-500 hover:text-black transition-all">Return to Terminal (Enter / Pad A)</button>
+</div>
+
+<div id="controller-status">NO GAMEPAD</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const maxLivesEl = document.getElementById('max-lives');
+    const depthEl = document.getElementById('depth');
+    const highScoreEl = document.getElementById('high-score');
+    const ammoEl = document.getElementById('ammo');
+    
+    const uiLayer = document.getElementById('ui-layer');
+    const mainMenu = document.getElementById('main-menu');
+    const messageBox = document.getElementById('message-box');
+    const upgradeScreen = document.getElementById('upgrade-screen');
+    const upgradeOptions = document.getElementById('upgrade-options');
+    const controllerStatus = document.getElementById('controller-status');
+
+    // --- Physics Constants ---
+    let GRAVITY = 0.6;
+    let JUMP_FORCE = -12;
+    let MOVE_SPEED = 5; 
+    let FRICTION = 0.82;
+    let AIR_RESISTANCE = 0.95;
+    const TERMINAL_VELOCITY = 15;
+    const PLAYER_SIZE = 36;
+    
+    let gameState = 'MENU'; 
+    let score = 0;
+    let highScore = 0;
+    let lives = 3;
+    let maxLives = 3;
+    let depth = 1;
+    let cameraX = 0;
+    let frameCount = 0;
+    let activePerks = [];
+
+    let screenShake = 0;
+    let hitStop = 0;
+
+    const keys = { left: false, right: false, up: false, shoot: false };
+    
+    let gamepadIndex = null;
+    let prevButtons = [];
+    let upgradeSelectedIndex = 0;
+
+    const player = {
+        x: 100, y: 200, vx: 0, vy: 0,
+        width: PLAYER_SIZE, height: PLAYER_SIZE,
+        grounded: false, 
+        jumpCount: 0, 
+        maxJumps: 2,
+        color: '#00ffff',
+        invulnFrames: 0,
+        isHurt: 0,
+        coyoteTime: 0,
+        jumpBuffer: 0,
+        facing: 1, 
+        ammo: 3,
+        ammoTimer: 0,
+        lastSafePlatform: null
+    };
+
+    let platforms = [], coins = [], enemies = [], exitPortal = null, bullets = [], particles = [];
+
+    const UPGRADES = [
+        { id: 'hp', name: 'アーマー強化', desc: '最大HPが +1 される', effect: () => { maxLives++; lives++; } },
+        { id: 'speed', name: 'オーバークロック', desc: '移動速度が上昇', effect: () => { MOVE_SPEED += 1.2; FRICTION = 0.85; } },
+        { id: 'jump', name: 'アンチグラビティ', desc: 'ジャンプ力が 10% 上昇', effect: () => { JUMP_FORCE -= 1.2; } },
+        { id: 'multi-jump', name: '跳躍プロトコル', desc: '空中ジャンプ回数が +1 回される', effect: () => { player.maxJumps++; } },
+        { id: 'repair', name: '自動修復機能', desc: 'HPを最大まで回復する', effect: () => { lives = maxLives; } }
+    ];
+
+    function generateLevel(currentDepth) {
+        platforms = [];
+        coins = [];
+        enemies = [];
+        bullets = [];
+        particles = [];
+        
+        let startPlatform = { x: 0, y: 550, w: 1000, h: 400, temporary: false };
+        platforms.push(startPlatform);
+        player.lastSafePlatform = startPlatform;
+
+        let lastX = 1000;
+        let lastY = 550;
+        
+        const segments = 15 + Math.min(currentDepth, 10);
+
+        for(let i = 0; i < segments; i++) {
+            let gap = 140 + Math.random() * 200;
+            let width = 180 + Math.random() * 400;
+            let heightChange = (Math.random() - 0.5) * 350;
+            let height = Math.min(Math.max(lastY + heightChange, 200), canvas.height - 100);
+            
+            platforms.push({ x: lastX + gap, y: height, w: width, h: 1000, temporary: false });
+
+            if(Math.random() > 0.3) {
+                let coinCount = Math.floor(Math.random() * 3) + 1;
+                for(let j=0; j<coinCount; j++) {
+                    coins.push({ 
+                        x: lastX + gap + (width/(coinCount+1))*(j+1), 
+                        y: height - 35, 
+                        collected: false 
+                    });
+                }
+            }
+
+            if(Math.random() > 0.4) {
+                let enemySize = 40;
+                enemies.push({ 
+                    x: lastX + gap + 50, 
+                    y: height - enemySize, 
+                    w: enemySize, h: enemySize, 
+                    startX: lastX + gap, 
+                    range: width - enemySize,
+                    speed: 1.8 + (currentDepth * 0.2), 
+                    dir: 1 
+                });
+            }
+            
+            lastX += gap + width;
+            lastY = height;
+        }
+
+        platforms.push({ x: lastX + 250, y: 500, w: 800, h: 500, temporary: false });
+        exitPortal = { x: lastX + 600, y: 440, w: 60, h: 60 };
+
+        player.x = 150;
+        player.y = 400;
+        player.vx = 0;
+        player.vy = 0;
+        player.ammo = 3;
+        cameraX = 0;
+        updateUI();
+    }
+
+    function updateUI() {
+        scoreEl.innerText = score.toString().padStart(5, '0');
+        livesEl.innerText = lives;
+        maxLivesEl.innerText = maxLives;
+        depthEl.innerText = depth;
+        ammoEl.innerText = player.ammo;
+    }
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- Controller Support ---
+    window.addEventListener("gamepadconnected", (e) => {
+        gamepadIndex = e.gamepad.index;
+        controllerStatus.innerText = `PAD CONNECTED: ${e.gamepad.id}`;
+        document.getElementById('gp-hint').style.display = 'block';
+    });
+
+    window.addEventListener("gamepaddisconnected", () => {
+        gamepadIndex = null;
+        controllerStatus.innerText = "NO GAMEPAD";
+        document.getElementById('gp-hint').style.display = 'none';
+    });
+
+    function pollGamepad() {
+        if (gamepadIndex === null) return;
+        const gp = navigator.getGamepads()[gamepadIndex];
+        if (!gp) return;
+
+        const bA = gp.buttons[1].pressed; // A
+        const bB = gp.buttons[0].pressed; // B
+        const bX = gp.buttons[3].pressed; // X
+        const bY = gp.buttons[2].pressed; // Y
+        const stickX = gp.axes[0];
+
+        if (gameState === 'MENU') {
+            if ((bA || bB) && !prevButtons[1] && !prevButtons[0]) {
+                startGame();
+            }
+        } else if (gameState === 'GAMEOVER') {
+            if (bA && !prevButtons[1]) backToMenu();
+        } else if (gameState === 'UPGRADE') {
+            if (stickX < -0.5 && !(prevButtons['stickX'] < -0.5)) {
+                upgradeSelectedIndex = Math.max(0, upgradeSelectedIndex - 1);
+                highlightUpgrade();
+            }
+            if (stickX > 0.5 && !(prevButtons['stickX'] > 0.5)) {
+                upgradeSelectedIndex = Math.min(2, upgradeSelectedIndex + 1);
+                highlightUpgrade();
+            }
+            if ((bA || bB) && !prevButtons[1] && !prevButtons[0]) {
+                const cards = upgradeOptions.querySelectorAll('.upgrade-card');
+                if (cards[upgradeSelectedIndex]) cards[upgradeSelectedIndex].click();
+            }
+        } else if (gameState === 'PLAYING') {
+            if (stickX < -0.2 || gp.buttons[14].pressed) {
+                keys.left = true; keys.right = false; player.facing = -1;
+            } else if (stickX > 0.2 || gp.buttons[15].pressed) {
+                keys.right = true; keys.left = false; player.facing = 1;
+            } else {
+                keys.left = false; keys.right = false;
+            }
+
+            if ((bA || bB) && !(prevButtons[1] || prevButtons[0])) {
+                player.jumpBuffer = 8;
+                tryJump();
+                keys.up = true;
+            } else if (!(bA || bB)) {
+                if (keys.up && player.vy < JUMP_FORCE / 2) player.vy = JUMP_FORCE / 2;
+                keys.up = false;
+            }
+
+            if ((bX || gp.buttons[7].pressed) && !(prevButtons[3] || prevButtons[7])) {
+                shoot();
+            }
+            
+            if (bY && !prevButtons[2]) {
+                resetTemporaryPlatforms();
+            }
+        }
+
+        prevButtons = gp.buttons.map(b => b.pressed);
+        prevButtons['stickX'] = stickX;
+    }
+
+    function highlightUpgrade() {
+        const cards = upgradeOptions.querySelectorAll('.upgrade-card');
+        cards.forEach((card, idx) => {
+            if (idx === upgradeSelectedIndex) {
+                card.style.borderColor = "#ff00ff";
+                card.style.background = "#220022";
+                card.style.transform = "scale(1.08)";
+            } else {
+                card.style.borderColor = "#00ffff";
+                card.style.background = "#111";
+                card.style.transform = "scale(1)";
+            }
+        });
+    }
+
+    // --- Key Event Listeners ---
+    window.addEventListener('keydown', e => {
+        if (e.code === 'Enter') {
+            if (gameState === 'MENU') startGame();
+            else if (gameState === 'GAMEOVER') backToMenu();
+        }
+
+        if (gameState === 'PLAYING') {
+            if (e.code === 'KeyR') resetTemporaryPlatforms();
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') { keys.left = true; player.facing = -1; }
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') { keys.right = true; player.facing = 1; }
+            if (e.code === 'ArrowUp' || e.code === 'Space' || e.code === 'KeyW') {
+                if (!keys.up) {
+                    player.jumpBuffer = 8;
+                    tryJump();
+                }
+                keys.up = true;
+            }
+            if (e.code === 'KeyF' || e.code === 'KeyE') {
+                if (!keys.shoot) shoot();
+                keys.shoot = true;
+            }
+        }
+    });
+    
+    window.addEventListener('keyup', e => {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+        if (e.code === 'ArrowUp' || e.code === 'Space' || e.code === 'KeyW') {
+            keys.up = false;
+            if (player.vy < JUMP_FORCE / 2) player.vy = JUMP_FORCE / 2;
+        }
+        if (e.code === 'KeyF' || e.code === 'KeyE') keys.shoot = false;
+    });
+
+    function resetTemporaryPlatforms() {
+        if (gameState !== 'PLAYING') return;
+        let resetOccurred = false;
+        platforms.forEach(p => {
+            if (p.temporary) {
+                spawnParticle(p.x + p.w / 2, p.y + p.h / 2, '#00ffff');
+                resetOccurred = true;
+            }
+        });
+        if (resetOccurred) {
+            platforms = platforms.filter(p => !p.temporary);
+            screenShake = 5;
+        }
+    }
+
+    function tryJump() {
+        if (gameState !== 'PLAYING') return;
+        if (player.grounded || player.coyoteTime > 0) {
+            player.vy = JUMP_FORCE;
+            player.grounded = false;
+            player.jumpCount = 1;
+            player.coyoteTime = 0;
+            player.jumpBuffer = 0;
+        } else if (player.jumpCount < player.maxJumps) {
+            player.vy = JUMP_FORCE * 0.85;
+            player.jumpCount++;
+            player.jumpBuffer = 0;
+        }
+    }
+
+    function shoot() {
+        if (gameState !== 'PLAYING' || player.ammo <= 0) return;
+        player.ammo--;
+        updateUI();
+        bullets.push({
+            x: player.facing === 1 ? player.x + player.width : player.x - 10,
+            y: player.y + player.height / 2 - 4,
+            vx: player.facing * 22,
+            vy: 0,
+            w: 18, h: 8,
+            life: 20
+        });
+        player.vx -= player.facing * 3;
+    }
+
+    function startGame() {
+        score = 0; lives = 3; maxLives = 3; depth = 1; 
+        MOVE_SPEED = 5; 
+        JUMP_FORCE = -12;
+        player.maxJumps = 2;
+        player.invulnFrames = 0;
+        player.isHurt = 0;
+        activePerks = [];
+        document.getElementById('perks-list').innerText = "";
+        gameState = 'PLAYING';
+        mainMenu.style.display = 'none';
+        messageBox.style.display = 'none';
+        uiLayer.style.display = 'block';
+        generateLevel(depth);
+    }
+
+    function backToMenu() {
+        gameState = 'MENU';
+        messageBox.style.display = 'none';
+        mainMenu.style.display = 'flex';
+        uiLayer.style.display = 'none';
+        if (score > highScore) {
+            highScore = score;
+            highScoreEl.innerText = highScore.toString().padStart(5, '0');
+        }
+    }
+
+    function showUpgradeScreen() {
+        gameState = 'UPGRADE';
+        upgradeScreen.style.display = 'flex';
+        upgradeOptions.innerHTML = '';
+        upgradeSelectedIndex = 0;
+        const shuffled = [...UPGRADES].sort(() => 0.5 - Math.random());
+        const selected = shuffled.slice(0, 3);
+        selected.forEach((upg, i) => {
+            const card = document.createElement('div');
+            card.className = 'upgrade-card';
+            card.innerHTML = `<h3 class="text-xl font-bold text-cyan-400">${upg.name}</h3><p class="text-white opacity-70">${upg.desc}</p>`;
+            card.onclick = () => {
+                upg.effect();
+                activePerks.push(upg.name);
+                document.getElementById('perks-list').innerText = "強化済み: " + activePerks.join(" | ");
+                closeUpgradeScreen();
+            };
+            upgradeOptions.appendChild(card);
+        });
+        if (gamepadIndex !== null) highlightUpgrade();
+    }
+
+    function closeUpgradeScreen() {
+        gameState = 'PLAYING';
+        upgradeScreen.style.display = 'none';
+        depth++;
+        generateLevel(depth);
+    }
+
+    function spawnParticle(x, y, color) {
+        for(let i = 0; i < 8; i++) {
+            particles.push({
+                x, y,
+                vx: (Math.random() - 0.5) * 12,
+                vy: (Math.random() - 0.5) * 12,
+                size: Math.random() * 5 + 2,
+                life: 1,
+                decay: 0.04,
+                color
+            });
+        }
+    }
+
+    function update() {
+        pollGamepad();
+
+        if (gameState !== 'PLAYING') return;
+        if (hitStop > 0) { hitStop--; return; }
+
+        frameCount++;
+        if (player.invulnFrames > 0) player.invulnFrames--;
+        if (player.isHurt > 0) player.isHurt--;
+        if (screenShake > 0) screenShake *= 0.9;
+        
+        if (player.coyoteTime > 0) player.coyoteTime--;
+        if (player.jumpBuffer > 0) player.jumpBuffer--;
+
+        if (player.ammo < 3) {
+            player.ammoTimer++;
+            if (player.ammoTimer > 60) {
+                player.ammo++;
+                player.ammoTimer = 0;
+                updateUI();
+            }
+        }
+
+        let acc = player.grounded ? 1.5 : 0.8;
+        if (keys.left) {
+            player.vx -= acc;
+            if (player.vx < -MOVE_SPEED) player.vx = -MOVE_SPEED;
+        } else if (keys.right) {
+            player.vx += acc;
+            if (player.vx > MOVE_SPEED) player.vx = MOVE_SPEED;
+        } else {
+            player.vx *= (player.grounded ? FRICTION : AIR_RESISTANCE);
+            if (Math.abs(player.vx) < 0.1) player.vx = 0;
+        }
+
+        player.x += player.vx;
+        platforms.forEach(p => {
+            if (rectIntersect(player.x, player.y, player.width, player.height, p.x, p.y, p.w, p.h)) {
+                if (player.vx > 0) { player.x = p.x - player.width; player.vx = 0; }
+                else if (player.vx < 0) { player.x = p.x + p.w; player.vx = 0; }
+            }
+        });
+
+        player.vy += GRAVITY;
+        if (player.vy > TERMINAL_VELOCITY) player.vy = TERMINAL_VELOCITY;
+        player.y += player.vy;
+
+        let wasGrounded = player.grounded;
+        player.grounded = false;
+        platforms.forEach(p => {
+            if (rectIntersect(player.x, player.y, player.width, player.height, p.x, p.y, p.w, p.h)) {
+                if (player.vy > 0) {
+                    player.grounded = true; player.jumpCount = 0; player.vy = 0;
+                    player.y = p.y - player.height;
+                    if (!p.temporary) player.lastSafePlatform = p;
+                    if (player.jumpBuffer > 0) tryJump();
+                } else if (player.vy < 0) {
+                    player.vy = 0; player.y = p.y + p.h;
+                }
+            }
+        });
+
+        if (wasGrounded && !player.grounded && player.vy > 0) player.coyoteTime = 10;
+
+        platforms = platforms.filter(p => {
+            if (p.temporary) { p.life--; return p.life > 0; }
+            return true;
+        });
+
+        bullets = bullets.filter(b => {
+            b.x += b.vx;
+            b.life--;
+            let hit = false;
+            
+            enemies = enemies.filter(en => {
+                if (!hit && rectIntersect(b.x, b.y, b.w, b.h, en.x, en.y, en.w, en.h)) {
+                    score += 200; spawnParticle(en.x + en.w/2, en.y + en.h/2, '#ff0055');
+                    hit = true; updateUI(); return false;
+                }
+                return true;
+            });
+
+            if (!hit) {
+                platforms.forEach(p => {
+                    if (!hit && rectIntersect(b.x, b.y, b.w, b.h, p.x, p.y, p.w, p.h)) {
+                        platforms.push({
+                            x: b.vx > 0 ? p.x - 45 : p.x + p.w,
+                            y: b.y - 12, w: 45, h: 24, temporary: true, life: 400
+                        });
+                        spawnParticle(b.x, b.y, '#00ffff'); hit = true;
+                    }
+                });
+            }
+            return b.life > 0 && !hit;
+        });
+
+        particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= p.decay; });
+        particles = particles.filter(p => p.life > 0);
+
+        enemies.forEach(en => {
+            en.x += en.speed * en.dir;
+            if (en.x < en.startX) { en.x = en.startX; en.dir = 1; }
+            else if (en.x > en.startX + en.range) { en.x = en.startX + en.range; en.dir = -1; }
+            if (rectIntersect(player.x, player.y, player.width, player.height, en.x, en.y, en.w, en.h)) {
+                if (player.vy > 0 && player.y + player.height < en.y + 20) {
+                    player.vy = JUMP_FORCE * 0.75; player.jumpCount = 1;
+                    enemies = enemies.filter(e => e !== en);
+                    score += 100; spawnParticle(en.x + en.w/2, en.y + en.h/2, '#ff0055'); updateUI();
+                } else { hitPlayer(); }
+            }
+        });
+
+        coins.forEach(c => {
+            if (!c.collected && rectIntersect(player.x, player.y, player.width, player.height, c.x, c.y, 20, 20)) {
+                c.collected = true; score += 50; updateUI();
+            }
+        });
+
+        if (exitPortal && rectIntersect(player.x, player.y, player.width, player.height, exitPortal.x, exitPortal.y, exitPortal.w, exitPortal.h)) {
+            showUpgradeScreen();
+        }
+
+        if (player.y > canvas.height + 500) hitPlayer(true);
+
+        let targetCameraX = player.x - canvas.width / 3;
+        cameraX += (targetCameraX - cameraX) * 0.1;
+        if (cameraX < 0) cameraX = 0;
+    }
+
+    function rectIntersect(x1, y1, w1, h1, x2, y2, w2, h2) {
+        return x2 < x1 + w1 && x2 + w2 > x1 && y2 < y1 + h1 && y2 + h2 > y1;
+    }
+
+    function respawnOnNearestPlatform() {
+        const stablePlatforms = platforms.filter(p => !p.temporary);
+        const hasEnemy = (plat) => {
+            return enemies.some(en => 
+                en.x + en.w > plat.x && en.x < plat.x + plat.w &&
+                Math.abs(en.y - (plat.y - en.h)) < 50
+            );
+        };
+        let spawnTarget = null;
+        if (player.lastSafePlatform && !hasEnemy(player.lastSafePlatform)) {
+            spawnTarget = player.lastSafePlatform;
+        }
+        if (!spawnTarget) {
+            const safeBackwards = stablePlatforms.filter(p => p.x < player.x && !hasEnemy(p));
+            if (safeBackwards.length > 0) {
+                spawnTarget = safeBackwards.reduce((prev, curr) => 
+                    (Math.abs(curr.x - player.x) < Math.abs(prev.x - player.x)) ? curr : prev
+                );
+            }
+        }
+        if (spawnTarget) {
+            player.x = spawnTarget.x + (spawnTarget.w / 2) - (player.width / 2);
+            player.y = spawnTarget.y - player.height - 20;
+            player.vx = 0; player.vy = 0;
+            player.lastSafePlatform = spawnTarget;
+        }
+        platforms = platforms.filter(p => !p.temporary);
+    }
+
+    function hitPlayer(isVoid = false) {
+        if (!isVoid && player.invulnFrames > 0) return;
+        lives--; updateUI(); screenShake = 20; hitStop = 8; player.isHurt = 20;
+        if (lives <= 0) { endGame(); return; } 
+        if (!isVoid) player.invulnFrames = 60;
+        respawnOnNearestPlatform();
+    }
+
+    function endGame() {
+        gameState = 'GAMEOVER';
+        document.getElementById('msg-text').innerHTML = `STATUS: TERMINATED<br><br>DEPTH REACHED: ${depth}<br>FINAL SCORE: ${score.toString().padStart(5, '0')}`;
+        messageBox.style.display = 'flex';
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "rgba(0, 255, 255, 0.05)";
+        const gridS = 120;
+        for(let x = (-cameraX * 0.5) % gridS; x < canvas.width; x += gridS) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        ctx.save();
+        if (screenShake > 0.5) {
+            ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+        }
+        ctx.translate(-cameraX, 0);
+        platforms.forEach(p => {
+            if (p.temporary) {
+                let isFlashing = p.life < 60 && Math.floor(frameCount / 4) % 2 === 0;
+                if (!isFlashing) {
+                    ctx.globalAlpha = p.life < 60 ? p.life / 60 : 1;
+                    ctx.shadowBlur = 15; ctx.shadowColor = '#00ffff';
+                    ctx.fillStyle = '#002233'; ctx.fillRect(p.x, p.y, p.w, p.h);
+                    ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.w, p.h);
+                    ctx.globalAlpha = 1;
+                }
+            } else {
+                ctx.shadowBlur = 12; ctx.shadowColor = '#ff00ff';
+                ctx.fillStyle = '#050505'; ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.w, p.h);
+            }
+        });
+        if (exitPortal) {
+            ctx.shadowBlur = 35; ctx.shadowColor = '#ccff00';
+            ctx.fillStyle = '#ccff00';
+            ctx.fillRect(exitPortal.x, exitPortal.y + Math.sin(frameCount * 0.1) * 12, exitPortal.w, exitPortal.h);
+        }
+        coins.forEach(c => {
+            if (!c.collected) {
+                ctx.shadowBlur = 15; ctx.shadowColor = '#ffff00';
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(c.x, c.y + Math.sin(frameCount * 0.15) * 6, 20, 20);
+            }
+        });
+        bullets.forEach(b => {
+            ctx.shadowBlur = 25; ctx.shadowColor = '#00ffff';
+            ctx.fillStyle = '#00ffff'; ctx.fillRect(b.x, b.y, b.w, b.h);
+        });
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size);
+        });
+        ctx.globalAlpha = 1;
+        enemies.forEach(en => {
+            ctx.shadowBlur = 15; ctx.shadowColor = '#ff0055';
+            ctx.fillStyle = '#ff0055'; ctx.fillRect(en.x, en.y, en.w, en.h);
+        });
+        if (player.invulnFrames <= 0 || Math.floor(frameCount / 4) % 2 === 0) {
+            let pColor = player.isHurt > 0 ? '#ff0000' : player.color;
+            ctx.shadowBlur = player.isHurt > 0 ? 35 : 20; ctx.shadowColor = pColor;
+            ctx.fillStyle = pColor; ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.fillStyle = 'white'; ctx.fillRect(player.x + 8, player.y + 8, player.width - 16, player.height - 16);
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            let visorX = player.facing === 1 ? player.x + 22 : player.x - 2;
+            ctx.fillRect(visorX, player.y + 6, 16, 10);
+        }
+        ctx.restore();
+        update();
+        requestAnimationFrame(draw);
+    }
+    draw();
+</script>
+</body>
+</html>
