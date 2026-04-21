@@ -60,22 +60,11 @@
             text-align: center;
             position: relative;
         }
-        .upgrade-card.selected {
+        .upgrade-card:hover, .upgrade-card.selected {
             background: #004444;
             border-color: #ff00ff;
             box-shadow: 0 0 20px #ff00ff;
             transform: scale(1.05);
-        }
-        .upgrade-card.selected::after {
-            content: 'READY TO INSTALL';
-            position: absolute;
-            bottom: -20px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 10px;
-            color: #ff00ff;
-            letter-spacing: 2px;
-            width: 100%;
         }
         .neon-text { text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff; }
         .neon-text-cyan { text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; }
@@ -149,7 +138,7 @@
             background: #00ffff;
             width: 0%;
             box-shadow: 0 0 15px #00ffff;
-            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.5s ease, box-shadow 0.5s ease;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         #goal-alert {
             position: fixed;
@@ -203,8 +192,9 @@
 
 <div id="proximity-vignette"></div>
 <div id="glitch-overlay"></div>
-<div id="goal-alert" class="italic">SIGNAL DETECTED</div>
+<div id="goal-alert" class="italic">Receive Signal</div>
 
+<!-- Title Screen -->
 <div id="main-menu" class="overlay-screen">
     <div class="scanline"></div>
     <h1 class="text-6xl md:text-8xl font-black italic mb-2 neon-text text-pink-500">CYBER</h1>
@@ -224,11 +214,12 @@
         <p class="font-bold text-pink-500 mb-2 border-b border-pink-900 w-full text-center pb-1 uppercase tracking-widest">System Controls</p>
         <div class="flex justify-between w-full gap-8 mb-1"><span>MOVE / JUMP</span><span class="key-box">WASD / SPACE</span></div>
         <div class="flex justify-between w-full gap-8 mb-1"><span>SHOOT / BUILD</span><span class="key-box">F / E</span></div>
-        <div class="flex justify-between w-full gap-8 mb-1"><span>RESET BUILD</span><span class="key-box">R</span></div>
+        <div class="flex justify-between w-full gap-8 mb-1"><span>QUIT TO MENU</span><span class="key-box">ESC</span></div>
         <div class="flex justify-between w-full gap-8"><span>UPGRADE NAV</span><span class="key-box">W / S / ENTER</span></div>
     </div>
 </div>
 
+<!-- Rule Modal -->
 <div id="rule-modal" class="overlay-screen" style="display: none; background: rgba(0,0,0,0.95);">
     <div class="modal-inner">
         <h2 class="text-2xl font-bold text-pink-500 mb-4 border-b border-pink-900 pb-2 neon-text">SYSTEM RULES</h2>
@@ -242,6 +233,18 @@
             <p><span class="text-red-400 font-bold">DANGER:</span> 接触はダメージ。踏むか撃って破壊。深層ほど敵の密度が上がります。</p>
         </div>
         <button onclick="toggleModal('rule-modal', false)" class="mt-8 w-full border border-cyan-500 text-cyan-500 py-2 hover:bg-cyan-500 hover:text-black transition-all font-bold">CLOSE</button>
+    </div>
+</div>
+
+<!-- Escape Confirmation Modal -->
+<div id="esc-confirm-modal" class="overlay-screen" style="display: none; z-index: 300; background: rgba(0,0,0,0.9);">
+    <div class="modal-inner border-pink-500 text-center">
+        <h2 class="text-2xl font-bold text-pink-500 mb-4 neon-text">INTERRUPT SYSTEM?</h2>
+        <p class="text-cyan-100 mb-8">現在のセッションを終了してメニューに戻りますか？<br><span class="text-xs opacity-50 text-pink-400">※進捗は保存されません。</span></p>
+        <div class="flex gap-4">
+            <button onclick="backToMenu()" class="flex-1 border border-pink-500 text-pink-500 py-2 hover:bg-pink-500 hover:text-black transition-all font-bold uppercase">End The Game</button>
+            <button onclick="toggleModal('esc-confirm-modal', false); resumeGame();" class="flex-1 border border-cyan-500 text-cyan-500 py-2 hover:bg-cyan-500 hover:text-black transition-all font-bold uppercase">CONTINUE</button>
+        </div>
     </div>
 </div>
 
@@ -311,6 +314,7 @@
     const messageBox = document.getElementById('message-box');
     const upgradeScreen = document.getElementById('upgrade-screen');
     const upgradeOptions = document.getElementById('upgrade-options');
+    const escModal = document.getElementById('esc-confirm-modal');
 
     // --- Audio Engine ---
     const AudioEngine = {
@@ -443,23 +447,34 @@
         lastSafePlatform: null
     };
 
-    let platforms = [], coins = [], enemies = [], exitPortal = null, bullets = [], enemyBullets = [], particles = [];
+    let platforms = [], coins = [], enemies = [], exitPortal = null, bullets = [], enemyBullets = [], particles = [], scorePopups = [];
 
     const UPGRADES = [
-        { id: 'hp', name: 'アーマー強化', desc: '最大HPが +1 される', effect: () => { maxLives++; lives++; } },
-        { id: 'speed', name: 'オーバークロック', desc: '移動速度が上昇', effect: () => { MOVE_SPEED += 1.2; FRICTION = 0.85; } },
-        { id: 'jump', name: 'アンチグラビティ', desc: 'ジャンプ力が 10% 上昇', effect: () => { JUMP_FORCE -= 1.2; } },
-        { id: 'multi-jump', name: '跳躍プロトコル', desc: '空中ジャンプ回数が +1 回される', effect: () => { player.maxJumps++; } },
-        { id: 'repair', name: '自動修復機能', desc: 'HPを最大まで回復する', effect: () => { lives = maxLives; } }
+        { id: 'hp', name: 'Armor Boost', desc: '最大HPが +1 される', effect: () => { maxLives++; lives++; } },
+        { id: 'speed', name: 'Overclock', desc: '移動速度が上昇', effect: () => { MOVE_SPEED += 1.2; FRICTION = 0.85; } },
+        { id: 'jump', name: 'Anti-Gravity', desc: 'ジャンプ力が 10% 上昇', effect: () => { JUMP_FORCE -= 1.2; } },
+        { id: 'multi-jump', name: 'Jump Protocol', desc: '空中ジャンプ回数が +1 回される', effect: () => { player.maxJumps++; } },
+        { id: 'repair', name: 'Auto-Repair', desc: 'HPを最大まで回復する', effect: () => { lives = maxLives; } }
     ];
 
     function toggleModal(id, show) {
         document.getElementById(id).style.display = show ? 'flex' : 'none';
         AudioEngine.init();
+        updateCursorVisibility();
+    }
+
+    function addScore(amount, x, y) {
+        score += amount;
+        scorePopups.push({
+            x: x, y: y,
+            value: amount,
+            life: 1.0,
+            color: amount >= 400 ? '#ff8800' : (amount >= 200 ? '#ff00ff' : '#ffff00')
+        });
     }
 
     function generateLevel(currentDepth) {
-        platforms = []; coins = []; enemies = []; bullets = []; enemyBullets = []; particles = [];
+        platforms = []; coins = []; enemies = []; bullets = []; enemyBullets = []; particles = []; scorePopups = [];
         
         let startPlatform = { x: 0, y: 550, w: 1000, h: 400, temporary: false };
         platforms.push(startPlatform);
@@ -467,22 +482,20 @@
         
         let lastX = 1000;
         let lastY = 550;
-        const segments = 15 + Math.min(currentDepth, 15);
+        
+        const segments = 12 + Math.min(currentDepth, 8); 
 
-        // 敵の生成確率: 階層が深いほど高くなる (Depth 1は 0%)
         const spawnChance = currentDepth === 1 ? 0 : Math.min(0.8, 0.2 + currentDepth * 0.08);
-        // 最大敵数: 階層とともに増加
         const maxEnemiesPerPlatform = Math.min(4, 1 + Math.floor(currentDepth / 4));
 
         for(let i = 0; i < segments; i++) {
-            let gap = 140 + Math.random() * 220;
-            let width = 200 + Math.random() * 450;
-            let heightChange = (Math.random() - 0.5) * 380;
+            let gap = 140 + Math.random() * 200;
+            let width = 200 + Math.random() * 400;
+            let heightChange = (Math.random() - 0.5) * 350;
             let height = Math.min(Math.max(lastY + heightChange, 200), canvas.height - 100);
             
             platforms.push({ x: lastX + gap, y: height, w: width, h: 1000, temporary: false });
 
-            // コイン生成
             if(Math.random() > 0.3) {
                 let coinCount = Math.floor(Math.random() * 3) + 1;
                 for(let j=0; j<coinCount; j++) {
@@ -490,14 +503,10 @@
                 }
             }
 
-            // 敵生成 (プログレッシブ)
             if(Math.random() < spawnChance) {
                 const enemiesCount = Math.min(maxEnemiesPerPlatform, Math.floor(Math.random() * 2) + 1);
-                
                 for (let k = 0; k < enemiesCount; k++) {
                     const enemyTypeRoll = Math.random();
-                    
-                    // Jumper (Depth 4以上で出現)
                     if (currentDepth >= 4 && enemyTypeRoll > 0.6) {
                         enemies.push({
                             type: 'jumper', x: lastX + gap + (width/2) + (k * 40), y: height - 40, w: 40, h: 40,
@@ -505,7 +514,6 @@
                             jumpInterval: Math.max(30, 110 - (currentDepth * 5)), color: '#ff8800'
                         });
                     } 
-                    // Walker (Depth 2以上で出現)
                     else if (currentDepth >= 2) {
                         enemies.push({ 
                             type: 'walker', x: lastX + gap + 20 + (k * 60), y: height - 40, w: 40, h: 40, 
@@ -548,10 +556,16 @@
         }, 50 + Math.random() * 100);
     }
 
-    function updateUI() {
-        if (gameState === 'PLAYING') document.body.classList.add('cursor-hidden');
-        else document.body.classList.remove('cursor-hidden');
+    function updateCursorVisibility() {
+        const isPaused = escModal.style.display === 'flex';
+        if (gameState === 'PLAYING' && !isPaused) {
+            document.body.classList.add('cursor-hidden');
+        } else {
+            document.body.classList.remove('cursor-hidden');
+        }
+    }
 
+    function updateUI() {
         scoreEl.innerText = score.toString().padStart(5, '0');
         livesEl.innerText = lives;
         maxLivesEl.innerText = maxLives;
@@ -560,7 +574,7 @@
         
         if (exitPortal) {
             let dist = exitPortal.x - player.x;
-            let remaining = Math.max(0, Math.floor(dist / 10));
+            let remaining = Math.max(0, Math.floor(dist / 10)); 
             distanceValEl.innerText = remaining;
             let progress = Math.min(100, Math.max(0, ((player.x - startX) / levelTotalWidth) * 100));
             progressBarEl.style.width = progress + '%';
@@ -602,6 +616,18 @@
 
     window.addEventListener('keydown', e => {
         AudioEngine.init();
+        
+        if (e.code === 'Escape') {
+            if (gameState === 'PLAYING') {
+                if (escModal.style.display === 'flex') {
+                    resumeGame();
+                } else {
+                    pauseGame();
+                }
+            }
+            return;
+        }
+
         if (e.code === 'Enter') {
             if (gameState === 'MENU') {
                 if(document.getElementById('rule-modal').style.display === 'flex') toggleModal('rule-modal', false);
@@ -616,7 +642,7 @@
             if (e.code === 'ArrowUp' || e.code === 'KeyW') { upgradeSelectedIndex = Math.max(0, upgradeSelectedIndex - 1); highlightUpgrade(); }
             if (e.code === 'ArrowDown' || e.code === 'KeyS') { upgradeSelectedIndex = Math.min(2, upgradeSelectedIndex + 1); highlightUpgrade(); }
         }
-        if (gameState === 'PLAYING') {
+        if (gameState === 'PLAYING' && escModal.style.display !== 'flex') {
             if (e.code === 'KeyR') resetTemporaryPlatforms();
             if (e.code === 'ArrowLeft' || e.code === 'KeyA') { keys.left = true; player.facing = -1; }
             if (e.code === 'ArrowRight' || e.code === 'KeyD') { keys.right = true; player.facing = 1; }
@@ -637,6 +663,15 @@
         }
         if (e.code === 'KeyF' || e.code === 'KeyE') keys.shoot = false;
     });
+
+    function pauseGame() {
+        toggleModal('esc-confirm-modal', true);
+        keys.left = keys.right = keys.up = keys.shoot = false;
+    }
+
+    function resumeGame() {
+        toggleModal('esc-confirm-modal', false);
+    }
 
     function resetTemporaryPlatforms() {
         if (gameState !== 'PLAYING') return;
@@ -672,13 +707,20 @@
         player.maxJumps = 2; player.invulnFrames = 0; player.isHurt = 0; activePerks = [];
         document.getElementById('perks-list').innerText = "";
         gameState = 'PLAYING'; mainMenu.style.display = 'none'; messageBox.style.display = 'none'; uiLayer.style.display = 'block';
+        escModal.style.display = 'none';
         generateLevel(depth);
+        updateCursorVisibility();
     }
 
     function backToMenu() {
-        gameState = 'MENU'; messageBox.style.display = 'none'; mainMenu.style.display = 'flex'; uiLayer.style.display = 'none';
+        gameState = 'MENU'; 
+        messageBox.style.display = 'none'; 
+        mainMenu.style.display = 'flex'; 
+        uiLayer.style.display = 'none';
+        escModal.style.display = 'none';
         vignetteEl.style.boxShadow = 'none'; goalAlertEl.style.opacity = '0'; glitchOverlay.style.display = 'none';
         if (score > highScore) { highScore = score; highScoreEl.innerText = highScore.toString().padStart(5, '0'); }
+        updateCursorVisibility();
     }
 
     function showUpgradeScreen() {
@@ -696,9 +738,10 @@
             upgradeOptions.appendChild(card);
         });
         highlightUpgrade();
+        updateCursorVisibility();
     }
 
-    function closeUpgradeScreen() { gameState = 'PLAYING'; upgradeScreen.style.display = 'none'; depth++; generateLevel(depth); }
+    function closeUpgradeScreen() { gameState = 'PLAYING'; upgradeScreen.style.display = 'none'; depth++; generateLevel(depth); updateCursorVisibility(); }
 
     function spawnParticle(x, y, color, count = 8, speedMult = 1) {
         for(let i = 0; i < count; i++) {
@@ -724,7 +767,7 @@
     }
 
     function update() {
-        if (gameState !== 'PLAYING') return;
+        if (gameState !== 'PLAYING' || escModal.style.display === 'flex') return;
         if (hitStop > 0) { hitStop--; return; }
 
         frameCount++;
@@ -772,7 +815,8 @@
             b.x += b.vx; b.life--; let hit = false;
             enemies = enemies.filter(en => {
                 if (!hit && rectIntersect(b.x, b.y, b.w, b.h, en.x, en.y, en.w, en.h)) {
-                    score += (en.type === 'jumper' ? 400 : 200);
+                    const points = (en.type === 'jumper' ? 400 : 200);
+                    addScore(points, en.x, en.y);
                     spawnParticle(en.x + en.w/2, en.y + en.h/2, en.color, 10, 1.5);
                     AudioEngine.play('kill'); hit = true; return false;
                 }
@@ -791,6 +835,9 @@
 
         particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= p.decay; });
         particles = particles.filter(p => p.life > 0);
+
+        scorePopups.forEach(p => { p.y -= 1.5; p.life -= 0.02; });
+        scorePopups = scorePopups.filter(p => p.life > 0);
 
         enemies.forEach(en => {
             if (en.type === 'walker') {
@@ -820,8 +867,9 @@
             if (rectIntersect(player.x, player.y, player.width, player.height, en.x, en.y, en.w, en.h)) {
                 if (player.vy > 0 && player.y + player.height < en.y + 20) {
                     player.vy = JUMP_FORCE * 0.75; player.jumpCount = 1;
+                    addScore(200, en.x, en.y);
                     enemies = enemies.filter(e => e !== en);
-                    score += 200; spawnParticle(en.x + en.w/2, en.y + en.h/2, en.color, 12, 1.2);
+                    spawnParticle(en.x + en.w/2, en.y + en.h/2, en.color, 12, 1.2);
                     AudioEngine.play('kill');
                 } else hitPlayer();
             }
@@ -831,7 +879,9 @@
 
         coins.forEach(c => {
             if (!c.collected && rectIntersect(player.x, player.y, player.width, player.height, c.x, c.y, 20, 20)) {
-                c.collected = true; score += 50; AudioEngine.play('coin');
+                c.collected = true; 
+                addScore(50, c.x, c.y);
+                AudioEngine.play('coin');
             }
         });
 
@@ -860,6 +910,7 @@
 
     function endGame() {
         gameState = 'GAMEOVER';
+        updateCursorVisibility();
         vignetteEl.style.boxShadow = 'none'; goalAlertEl.style.opacity = '0'; glitchOverlay.style.display = 'none';
         document.getElementById('msg-text').innerHTML = `STATUS: TERMINATED<br><br>DEPTH REACHED: ${depth}<br>FINAL SCORE: ${score.toString().padStart(5, '0')}`;
         messageBox.style.display = 'flex';
@@ -875,6 +926,7 @@
         ctx.save();
         if (screenShake > 0.5) ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
         ctx.translate(-cameraX, 0);
+        
         platforms.forEach(p => {
             if (p.temporary) {
                 if (!(p.life < 60 && Math.floor(frameCount / 4) % 2 === 0)) {
@@ -890,17 +942,21 @@
                 ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.w, p.h);
             }
         });
+        
         if (exitPortal) {
             ctx.shadowBlur = 35; ctx.shadowColor = '#ccff00';
             ctx.fillStyle = '#ccff00'; ctx.fillRect(exitPortal.x, exitPortal.y + Math.sin(frameCount * 0.1) * 12, exitPortal.w, exitPortal.h);
         }
+        
         coins.forEach(c => {
             if (!c.collected) {
                 ctx.shadowBlur = 15; ctx.shadowColor = '#ffff00';
                 ctx.fillStyle = '#ffff00'; ctx.fillRect(c.x, c.y + Math.sin(frameCount * 0.15) * 6, 20, 20);
             }
         });
+        
         bullets.forEach(b => { ctx.shadowBlur = 20; ctx.shadowColor = '#00ffff'; ctx.fillStyle = '#00ffff'; ctx.fillRect(b.x, b.y, b.w, b.h); });
+        
         particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); });
         ctx.globalAlpha = 1;
         
@@ -911,14 +967,19 @@
                 ctx.fillRect(en.x, en.y, en.w, en.h);
                 ctx.fillStyle = 'white';
                 ctx.fillRect(en.x + 5, en.y + 10, en.w - 10, 5);
-                if (en.vy > 2) {
-                   ctx.fillStyle = 'rgba(255,255,255,0.3)';
-                   ctx.fillRect(en.x - 5, en.y + en.h - 5, en.w + 10, 10);
-                }
             } else {
                 ctx.fillRect(en.x, en.y, en.w, en.h);
             }
         });
+
+        scorePopups.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.font = 'bold 18px Courier New';
+            ctx.shadowBlur = 10; ctx.shadowColor = p.color;
+            ctx.fillText('+' + p.value, p.x, p.y);
+        });
+        ctx.globalAlpha = 1;
 
         if (player.invulnFrames <= 0 || Math.floor(frameCount / 4) % 2 === 0) {
             let pColor = player.isHurt > 0 ? '#ff0000' : player.color;
@@ -933,6 +994,7 @@
         requestAnimationFrame(draw);
     }
     draw();
+    updateCursorVisibility();
 </script>
 </body>
 </html>
